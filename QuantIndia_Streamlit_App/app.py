@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -15,19 +14,39 @@ st.title('QuantIndia Research System')
 st.markdown('*PhD-level systematic quantitative investment prototype*')
 st.markdown('---')
 
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-BACKTEST_DIR = os.path.join(BASE_DIR, 'backtest_results')
+# Folder paths
+APP_DIR = os.path.dirname(__file__)
+REPO_ROOT = os.path.abspath(os.path.join(APP_DIR, '..'))
+
+POSSIBLE_BACKTEST_DIRS = [
+    os.path.join(APP_DIR, 'backtest_results'),
+    os.path.join(REPO_ROOT, 'backtest_results')
+]
+
+POSSIBLE_NLP_DIRS = [
+    os.path.join(APP_DIR, 'data', 'nlp'),
+    os.path.join(REPO_ROOT, 'data', 'nlp')
+]
+
+def find_existing_file(possible_dirs, filename):
+    for folder in possible_dirs:
+        path = os.path.join(folder, filename)
+        if os.path.exists(path):
+            return path
+    return None
 
 @st.cache_data(ttl=3600)
 def load_backtest():
     possible_files = [
-        os.path.join(BACKTEST_DIR, 'trade_log.csv'),
-        os.path.join(BACKTEST_DIR, 'tsmom_all_symbols.csv'),
-        os.path.join(BACKTEST_DIR, 'tsmom_nifty_results.csv')
+        'tsmom_all_symbols.csv',
+        'tsmom_nifty_results.csv',
+        'trade_log.csv'
     ]
 
-    for file_path in possible_files:
-        if os.path.exists(file_path):
+    for filename in possible_files:
+        file_path = find_existing_file(POSSIBLE_BACKTEST_DIRS, filename)
+
+        if file_path is not None:
             df = pd.read_csv(file_path)
 
             if 'date' in df.columns:
@@ -40,13 +59,15 @@ def load_backtest():
                 df.iloc[:, 0] = pd.to_datetime(df.iloc[:, 0])
                 df = df.set_index(df.columns[0])
 
-            return df
+            return df, file_path
 
-    return pd.DataFrame()
+    return pd.DataFrame(), None
 
-bt = load_backtest()
+bt, loaded_file = load_backtest()
 
 col1, col2, col3, col4 = st.columns(4)
+
+return_col = None
 
 if len(bt) > 0:
     if 'strategy_return' in bt.columns:
@@ -55,8 +76,6 @@ if len(bt) > 0:
         return_col = 'portfolio_return'
     elif 'tsmom_return' in bt.columns:
         return_col = 'tsmom_return'
-    else:
-        return_col = None
 
     if return_col is not None:
         returns = bt[return_col].dropna()
@@ -122,3 +141,16 @@ papers = {
 
 for paper, desc in papers.items():
     st.markdown(f'- **{paper}**: {desc}')
+
+st.markdown('---')
+st.subheader('Data Check')
+
+if loaded_file is not None:
+    st.success(f'Loaded backtest file: {loaded_file}')
+    st.write('Columns found:', list(bt.columns))
+    st.write('Rows found:', len(bt))
+else:
+    st.error('No backtest CSV file found.')
+    st.write('Checked these folders:')
+    for folder in POSSIBLE_BACKTEST_DIRS:
+        st.code(folder)
